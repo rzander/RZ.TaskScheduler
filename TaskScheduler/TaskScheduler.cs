@@ -1,10 +1,11 @@
-﻿namespace RZ.TaskScheduler
-{
+﻿using System.Runtime.CompilerServices;
 
+namespace RZ.TaskScheduler
+{
     /// <summary>
     /// The scheduler is a simple class that allows you to schedule tasks to run at a specific time interval.
     /// </summary>
-    public static class Scheduler
+    public sealed class Scheduler
     {
         /// <summary>
         /// The list of scheduled tasks.
@@ -64,6 +65,22 @@
         }
 
         /// <summary>
+        /// Stops a scheduled task by name.
+        /// </summary>
+        /// <param name="Name"></param>
+        /// <returns></returns>
+        public static bool Stop(string Name)
+        {
+            var existing = ScheduledTasks.FirstOrDefault(x => x.Name == Name);
+            if (existing != null)
+            {
+                existing.Timer?.Dispose();
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>
         /// Calls the scheduled task by name.
         /// </summary>
         /// <param name="Name"></param>
@@ -74,7 +91,7 @@
             {
                 new Task(() =>
                 {
-                    existing.TimerCallback(existing);
+                    existing.Run();
                 }).Start();
 
                 return true;
@@ -85,6 +102,14 @@
             }
         }
 
+        /// <summary>
+        /// Calls the scheduled task by name.
+        /// </summary>
+        /// <param name="Name"></param>
+        /// <param name="singleinstance"></param>
+        /// <param name="wait"></param>
+        /// <param name="timeout"></param>
+        /// <returns></returns>
         public static bool Run(string Name, bool singleinstance, bool wait = false, TimeSpan? timeout = null)
         {
             if (singleinstance)
@@ -92,39 +117,7 @@
                 var existing = ScheduledTasks.FirstOrDefault(x => x.Name == Name);
                 if (existing != null)
                 {
-
-                    if (timeout == null)
-                        timeout = TimeSpan.FromMilliseconds(500);
-
-
-                    Task tCall = new Task(() =>
-                    {
-                        //check if Task is already running
-                        if (Monitor.TryEnter(existing, (TimeSpan)timeout))
-                        {
-                            try
-                            {
-                                existing.TimerCallback(existing);
-                            }
-                            finally
-                            {
-                                Monitor.Exit(existing);
-                            }
-                        }
-                        else
-                        {
-                            Console.WriteLine("Task is already running...");
-                        }
-                    });
-
-
-                    tCall.Start();
-
-                    //wait for task to complete
-                    if (wait)
-                        tCall.Wait((TimeSpan)timeout);
-
-                    return true;
+                    existing.Run(singleinstance, wait, timeout);
                 }
 
             }
@@ -159,6 +152,7 @@
     public class ScheduledTask
     {
         private DateTime _nextRun;
+        internal DateTime _lastRun;
         public required TimerCallback TimerCallback { get; set; }
         public required string Name { get; set; }
         public Timer? Timer { get; set; }
@@ -166,6 +160,11 @@
         public DateTime? NextRun
         {
             get { return _nextRun; }
+        }
+
+        public DateTime? LastRun
+        {
+            get { return _lastRun; }
         }
 
         /// <summary>
@@ -182,9 +181,13 @@
 
             if (pause) dueTime = -1;
 
-            //Timer = new Timer(TimerCallback, this, dueTime, (int)timeSpan.TotalMilliseconds);
-            Timer = new Timer((e) => { Scheduler.Run(Name, singleinstance, false, timeSpan); }, this, dueTime, (int)timeSpan.TotalMilliseconds);
+            if (Timer != null)
+            {
+                Timer.Dispose();
+            }
+
             _nextRun = DateTime.Now + new TimeSpan(0, 0, 0, 0, dueTime);
+            Timer = new Timer((e) => { _lastRun = DateTime.Now; Scheduler.Run(Name, singleinstance, false, timeSpan); }, this, dueTime, (int)timeSpan.TotalMilliseconds);
 
             return this;
         }
@@ -202,8 +205,13 @@
             if (delay != null) dueTime = (int)delay.Value.TotalMilliseconds;
             if (timeSpan != null) period = (int)timeSpan.Value.TotalMilliseconds; else period = -1;
 
-            Timer = new Timer((e) => { Scheduler.Run(Name, singleinstance, false, timeSpan); }, this, dueTime, period);
+            if (Timer != null)
+            {
+                Timer.Dispose();
+            }
+
             _nextRun = DateTime.Now + new TimeSpan(0, 0, 0, 0, dueTime);
+            Timer = new Timer((e) => { _lastRun = DateTime.Now; Scheduler.Run(Name, singleinstance, false, timeSpan); }, this, dueTime, period);
 
             return this;
         }
@@ -218,8 +226,12 @@
             int dueTime = 0;
             if (delay != null) dueTime = (int)delay.Value.TotalMilliseconds;
 
-            Timer = new Timer((e) => { Scheduler.Run(Name, singleinstance, false); }, this, dueTime, -1);
+            if(Timer != null){
+                Timer.Dispose();
+            }
+
             _nextRun = DateTime.Now + new TimeSpan(0, 0, 0, 0, dueTime);
+            Timer = new Timer((e) => { _lastRun = DateTime.Now; Scheduler.Run(Name, singleinstance, false); }, this, dueTime, -1);
 
             return this;
         }
@@ -232,9 +244,88 @@
         public ScheduledTask Once(DateTime startTime, bool singleinstance = false)
         {
             var dueTime = (startTime - DateTime.Now);
-            Timer = new Timer((e) => { Scheduler.Run(Name, singleinstance, false); }, this, dueTime, Timeout.InfiniteTimeSpan);
+
+            if (Timer != null)
+            {
+                Timer.Dispose();
+            }
+
             _nextRun = DateTime.Now + dueTime;
+            Timer = new Timer((e) => { _lastRun = DateTime.Now; Scheduler.Run(Name, singleinstance, false); }, this, dueTime, Timeout.InfiniteTimeSpan);
+            
             return this;
+        }
+
+        public ScheduledTask Stop()
+        {
+            if (Timer != null)
+            {
+                Timer.Dispose();
+            }
+
+            _nextRun = new DateTime();
+            return this;
+        }
+
+        /// <summary>
+        /// Run the task.
+        /// </summary>
+        public bool Run()
+        {
+            new Task(() =>
+            {
+                _lastRun = DateTime.Now;
+                TimerCallback(this);
+            }).Start();
+
+            return true;
+        }
+
+        /// <summary>
+        /// Run the task.
+        /// </summary>
+        /// <param name="singleinstance"></param>
+        /// <param name="wait"></param>
+        /// <param name="timeout"></param>
+        /// <returns></returns>
+        public bool Run(bool singleinstance, bool wait = false, TimeSpan? timeout = null)
+        {
+            if (singleinstance)
+            {
+                    if (timeout == null)
+                        timeout = TimeSpan.FromMilliseconds(1000);
+
+
+                    Task tCall = new Task(() =>
+                    {
+                        //check if Task is already running
+                        if (Monitor.TryEnter(this, (TimeSpan)timeout))
+                        {
+                            try
+                            {
+                                _lastRun = DateTime.Now;
+                                TimerCallback(this);
+                            }
+                            finally
+                            {
+                                Monitor.Exit(this);
+                            }
+                        }
+                        else
+                        {
+                            Console.WriteLine("Task is already running...");
+                        }
+                    });
+
+                    tCall.Start();
+
+                    //wait for task to complete
+                    if (wait)
+                        tCall.Wait((TimeSpan)timeout);
+
+                    return true;
+            }
+            else return Run();
         }
     }
 }

@@ -1,0 +1,23 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net8.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<Title>RZ.TaskScheduler</Title>
+		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+		<Copyright>(c) 2024 by Roger Zander</Copyright>
+		<Description>a simple TaskScheduler</Description>
+		<ProductName>RZ.TaskScheduler</ProductName>
+		<Company>Zander - Tools</Company>
+		<FileVersion>1.0.1.0</FileVersion>
+		<PackageVersion>1.0.1</PackageVersion>
+		<PackageProjectUrl>https://github.com/rzander/RZ.TaskScheduler</PackageProjectUrl>
+		<RepositoryUrl>https://github.com/rzander/RZ.TaskScheduler</RepositoryUrl>
+	</PropertyGroup>
+
+	<Target Name="PostBuild" AfterTargets="PostBuildEvent">
+		<Exec Command="if &quot;$(ConfigurationName)&quot;==&quot;Debug&quot; GOTO  end&#xD;&#xA; &quot;C:\tools\signtool.exe&quot; sign /i &quot;Sectigo RSA Code Signing CA&quot; /n &quot;Zander - Tools&quot; /t &quot;http://timestamp.comodoca.com/authenticode&quot; /q &quot;$(TargetPath)&quot; &#xD;&#xA;:end" />
+	</Target>
+	
+</Project>
