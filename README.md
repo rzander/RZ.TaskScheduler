@@ -42,3 +42,49 @@ Scheduler.Run("Task1");
 ```c#
 Scheduler.Run("Task1", singleinstance: true);
 ```
+
+### Create a Task and trigger code OnError and OnComplete
+```c#
+Scheduler.Add("Task1", (e) =>
+            {
+                Console.WriteLine($"{DateTime.Now.ToString("HH:mm:ss")} Timer {(e as ScheduledTask)?.Name} was started...");
+                Thread.Sleep(5000);
+                Console.WriteLine($"{DateTime.Now.ToString("HH:mm:ss")} Timer {(e as ScheduledTask)?.Name} completed.");
+                (e as ScheduledTask).Result = "myResult";
+            }).OnError((e) =>
+            {
+                Console.WriteLine($"{DateTime.Now.ToString("HH:mm:ss")} Timer {(e as ScheduledTaskException)?.ScheduledTask.Name} was failed with Error '{(e as ScheduledTaskException)?.Exception.Message}'.");
+            }).OnComplete((e) =>
+            {
+                Console.WriteLine($"{DateTime.Now.ToString("HH:mm:ss")} Timer {(e as ScheduledTask)?.Name} was completed with Result: {(e as ScheduledTask)?.Result}");
+            }).Run(cancellationTokenSource: new CancellationTokenSource(new TimeSpan(0,5,0)));
+```
+
+### Queue Tasks to run in sequence
+>Note: The CancellationToken lifetime includes the time in the queue !!
+```c#
+var T1 = Scheduler.Add("Task1", (e) =>
+            {
+                Console.WriteLine($"{DateTime.Now.ToString("HH:mm:ss")} Timer {(e as ScheduledTask)?.Name} was started...");
+                Thread.Sleep(3000);
+                if ((e as ScheduledTask)?.CancellationToken.IsCancellationRequested == true)
+                {
+                    Console.WriteLine($"{DateTime.Now.ToString("HH:mm:ss")} Timer {(e as ScheduledTask)?.Name} was cancelled.");
+                    return;
+                }
+                else
+                {
+                    Console.WriteLine($"{DateTime.Now.ToString("HH:mm:ss")} Timer {(e as ScheduledTask)?.Name} completed.");
+                    (e as ScheduledTask).Result = "myResult";
+                }
+            }).OnError((e) =>
+            {
+                Console.WriteLine($"{DateTime.Now.ToString("HH:mm:ss")} Timer {(e as ScheduledTaskException)?.ScheduledTask.Name} was failed with Error '{(e as ScheduledTaskException)?.Exception.Message}'.");
+            }).OnComplete((e) =>
+            {
+                Console.WriteLine($"{DateTime.Now.ToString("HH:mm:ss")} Timer {(e as ScheduledTask)?.Name} was completed with Result: {(e as ScheduledTask)?.Result}");
+            });
+T1.Queue(new CancellationTokenSource(2000));
+T1.Queue();
+T1.Queue();
+```
