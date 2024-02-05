@@ -38,7 +38,7 @@ Scheduler.Add("Task2", (e) =>
 Scheduler.Run("Task1");
 ```
 
-### manually trigger a task but only run one instance (skip is task is already running)
+### manually trigger a task but only run one instance (skip if task is already running)
 ```c#
 Scheduler.Run("Task1", singleinstance: true);
 ```
