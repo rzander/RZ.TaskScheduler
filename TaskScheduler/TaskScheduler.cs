@@ -91,7 +91,7 @@ namespace RZ.TaskScheduler
             {
                 new Task(() =>
                 {
-                    existing.Run();
+                    existing.Run(null);
                 }).Start();
 
                 return true;
@@ -151,11 +151,28 @@ namespace RZ.TaskScheduler
     /// </summary>
     public class ScheduledTask
     {
+        private TaskFactory _factory;
         private DateTime _nextRun;
         internal DateTime _lastRun;
+        private bool _isRunning = false;
+        private bool _isCompleted = false;
         public required TimerCallback TimerCallback { get; set; }
         public required string Name { get; set; }
         public Timer? Timer { get; set; }
+        private TimerCallback? _onError { get; set; }
+        private TimerCallback? _onComplete { get; set; }
+        public object? Result { get; set; }
+        public CancellationToken CancellationToken { get; set; }
+
+        public bool IsRunning
+        {
+            get { return _isRunning; }
+        }
+
+        public bool IsCompleted
+        {
+            get { return _isCompleted; }
+        }
 
         public DateTime? NextRun
         {
@@ -226,7 +243,8 @@ namespace RZ.TaskScheduler
             int dueTime = 0;
             if (delay != null) dueTime = (int)delay.Value.TotalMilliseconds;
 
-            if(Timer != null){
+            if (Timer != null)
+            {
                 Timer.Dispose();
             }
 
@@ -252,7 +270,7 @@ namespace RZ.TaskScheduler
 
             _nextRun = DateTime.Now + dueTime;
             Timer = new Timer((e) => { _lastRun = DateTime.Now; Scheduler.Run(Name, singleinstance, false); }, this, dueTime, Timeout.InfiniteTimeSpan);
-            
+
             return this;
         }
 
@@ -263,6 +281,9 @@ namespace RZ.TaskScheduler
                 Timer.Dispose();
             }
 
+            Result = null;
+            _isRunning = false;
+            _isCompleted = false;
             _nextRun = new DateTime();
             return this;
         }
@@ -270,13 +291,64 @@ namespace RZ.TaskScheduler
         /// <summary>
         /// Run the task.
         /// </summary>
-        public bool Run()
+        public bool Run(CancellationTokenSource? cancellationTokenSource = null, TimeSpan? MaxRunTime = null)
         {
-            new Task(() =>
+            _isRunning = true;
+            _isCompleted = false;
+
+            if (cancellationTokenSource == null)
             {
-                _lastRun = DateTime.Now;
-                TimerCallback(this);
-            }).Start();
+                cancellationTokenSource = new CancellationTokenSource();
+            }
+
+            if(MaxRunTime != null)
+            {
+                cancellationTokenSource.CancelAfter((TimeSpan)MaxRunTime);
+            }
+
+            CancellationToken = cancellationTokenSource.Token;
+
+            var T1 = Task.Run(() =>
+            {
+                try
+                {
+                    _lastRun = DateTime.Now;
+                    TimerCallback(this);
+                    if (_onComplete != null && !CancellationToken.IsCancellationRequested && !cancellationTokenSource.Token.IsCancellationRequested)
+                        _onComplete(this);
+                    
+                    if(CancellationToken.IsCancellationRequested || cancellationTokenSource.Token.IsCancellationRequested)
+                        _isCompleted = false;
+                    else
+                        _isCompleted = true;
+
+                    _isRunning = false;
+                }
+                catch (Exception ex)
+                {
+                    if (_onError != null)
+                        _onError(new ScheduledTaskException(ex, this));
+                    _isCompleted = false;
+                }
+                finally
+                {
+
+                    _isRunning = false;
+                }
+            }, cancellationTokenSource.Token);
+
+            try
+            {
+                T1.Wait(cancellationTokenSource.Token);
+            }
+            catch (Exception ex)
+            {
+                _isRunning = false;
+                if (_onError != null)
+                    _onError(new ScheduledTaskException(ex, this));
+                _isCompleted = false;
+                return false;
+            }
 
             return true;
         }
@@ -288,44 +360,184 @@ namespace RZ.TaskScheduler
         /// <param name="wait"></param>
         /// <param name="timeout"></param>
         /// <returns></returns>
-        public bool Run(bool singleinstance, bool wait = false, TimeSpan? timeout = null)
+        public bool Run(bool singleinstance = true, bool wait = false, TimeSpan? timeout = null, CancellationTokenSource? cancellationTokenSource = null, TimeSpan? MaxRunTime = null)
         {
+            _isRunning = true;
+            _isCompleted = false;
+
+            if (cancellationTokenSource == null)
+            {
+                cancellationTokenSource = new CancellationTokenSource();
+            }
+
+            if (MaxRunTime != null)
+            {
+                cancellationTokenSource.CancelAfter((TimeSpan)MaxRunTime);
+            }
+
+            CancellationToken = cancellationTokenSource.Token;
+
             if (singleinstance)
             {
+                if (timeout == null)
+                    timeout = TimeSpan.FromMilliseconds(1000);
+
+                Task tCall = Task.Run(() =>
+                {
+                    //check if Task is already running
+                    if (Monitor.TryEnter(this, (TimeSpan)timeout))
+                    {
+                        try
+                        {
+                            _lastRun = DateTime.Now;
+                            TimerCallback(this);
+                            if (_onComplete != null && !CancellationToken.IsCancellationRequested && !cancellationTokenSource.Token.IsCancellationRequested)
+                                _onComplete(this);
+                            
+                            if (CancellationToken.IsCancellationRequested || cancellationTokenSource.Token.IsCancellationRequested)
+                                _isCompleted = false;
+                            else
+                                _isCompleted = true;
+
+                        }
+                        catch (Exception ex)
+                        {
+                            if (_onError != null)
+                                _onError(new ScheduledTaskException(ex, this));
+                            _isCompleted = false;
+                        }
+                        finally
+                        {
+                            Monitor.Exit(this);
+
+                            _isRunning = false;
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine("Task is already running...");
+                    }
+                }, cancellationTokenSource.Token);
+
+                //wait for task to complete
+                if (wait)
+                {
+                    try
+                    {
+                        tCall.Wait((TimeSpan)timeout, cancellationTokenSource.Token);
+                    }
+                    catch (Exception ex)
+                    {
+                        if (_onError != null)
+                            _onError(new ScheduledTaskException(ex, this));
+                        _isCompleted = false;
+                    }
+                }
+                _isRunning = false;
+                return true;
+            }
+            else return Run(cancellationTokenSource);
+        }
+
+        public async Task RunAsync(bool singleinstance = true, TimeSpan? timeout = null, CancellationTokenSource? cancellationTokenSource = null)
+        {
+            if (cancellationTokenSource == null)
+            {
+                cancellationTokenSource = new CancellationTokenSource();
+            }
+
+            CancellationToken = cancellationTokenSource.Token;
+
+            if (singleinstance)
+            {
+                await Task.Run(() =>
+                {
                     if (timeout == null)
                         timeout = TimeSpan.FromMilliseconds(1000);
 
-
-                    Task tCall = new Task(() =>
+                    //check if Task is already running
+                    if (Monitor.TryEnter(this, (TimeSpan)timeout))
                     {
-                        //check if Task is already running
-                        if (Monitor.TryEnter(this, (TimeSpan)timeout))
+                        try
                         {
-                            try
-                            {
-                                _lastRun = DateTime.Now;
-                                TimerCallback(this);
-                            }
-                            finally
-                            {
-                                Monitor.Exit(this);
-                            }
+                            _lastRun = DateTime.Now;
+                            TimerCallback(this);
+                            if (_onComplete != null && !CancellationToken.IsCancellationRequested && !cancellationTokenSource.Token.IsCancellationRequested)
+                                _onComplete(this);
+                            return true;
                         }
-                        else
+                        catch (Exception ex)
                         {
-                            Console.WriteLine("Task is already running...");
+                            if (_onError != null)
+                                _onError(new ScheduledTaskException(ex, this));
+                            return false;
                         }
-                    });
-
-                    tCall.Start();
-
-                    //wait for task to complete
-                    if (wait)
-                        tCall.Wait((TimeSpan)timeout);
-
-                    return true;
+                        finally
+                        {
+                            Monitor.Exit(this);
+                        }
+                    }
+                    return false;
+                }, cancellationTokenSource.Token);
             }
-            else return Run();
+            else
+            {
+                await Task.Run(() =>
+                {
+                    try
+                    {
+                        _lastRun = DateTime.Now;
+                        TimerCallback(this);
+                        if (_onComplete != null)
+                            _onComplete(this);
+                        return true;
+                    }
+                    catch (Exception ex)
+                    {
+                        if (_onError != null)
+                            _onError(new ScheduledTaskException(ex, this));
+                        return false;
+                    }
+                }, cancellationTokenSource.Token);
+            }
+        }
+
+        public ScheduledTask OnError(TimerCallback onError)
+        {
+            _onError = onError;
+            return this;
+        }
+
+        public ScheduledTask OnComplete(TimerCallback onComplete)
+        {
+            _onComplete = onComplete;
+            return this;
+        }
+
+        public void Queue(CancellationTokenSource? cancellationTokenSource = null)
+        {
+            if (cancellationTokenSource == null)
+            {
+                cancellationTokenSource = new CancellationTokenSource();
+            }
+
+            CancellationToken = cancellationTokenSource.Token;
+
+            var options = new ParallelOptions() { MaxDegreeOfParallelism = 1, CancellationToken = cancellationTokenSource.Token };
+            Parallel.Invoke(options, () => { Run(cancellationTokenSource); });
         }
     }
+
+    public class ScheduledTaskException : Exception
+    {
+        public ScheduledTaskException(Exception ex, ScheduledTask st)
+        {
+            Exception = ex;
+            ScheduledTask = st;
+        }
+        public Exception Exception { get; set; }
+
+        public ScheduledTask ScheduledTask { get; set; }
+    }
+
 }
