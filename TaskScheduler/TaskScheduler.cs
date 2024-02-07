@@ -257,7 +257,7 @@ namespace RZ.TaskScheduler
         /// <param name="Name"></param>
         /// <param name="timerCallback"></param>
         /// <returns></returns>
-        public new static RZTask Add(string Name, TimerCallback timerCallback)
+        public new static RZTask? Add(string Name, TimerCallback timerCallback)
         {
             return _instance.Add(Name, timerCallback);
         }
