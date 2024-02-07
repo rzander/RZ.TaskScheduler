@@ -5,7 +5,7 @@ a simple TaskScheduler library for .NET
 
 ### Create a Task but do not run
 ```c#
-Scheduler.Add("Task1", (e) =>
+RZSched.Add("Task1", (e) =>
       {
           Console.WriteLine($"{DateTime.Now.ToString("HH:mm:ss")} Timer {(e as ScheduledTask)?.Name} was started...");
           Thread.Sleep(2000);
@@ -15,7 +15,7 @@ Scheduler.Add("Task1", (e) =>
 
 ### Create a Task to run every 10s
 ```c#
-Scheduler.Add("Task2", (e) =>
+RZSched.Add("Task2", (e) =>
       {
           Console.WriteLine($"{DateTime.Now.ToString("HH:mm:ss")} Timer {(e as ScheduledTask)?.Name} was started...");
           Thread.Sleep(2000);
@@ -25,7 +25,7 @@ Scheduler.Add("Task2", (e) =>
 
 ### Create a Task to run every 10s, but start first run in 5s
 ```c#
-Scheduler.Add("Task2", (e) =>
+RZSched.Add("Task2", (e) =>
       {
           Console.WriteLine($"{DateTime.Now.ToString("HH:mm:ss")} Timer {(e as ScheduledTask)?.Name} was started...");
           Thread.Sleep(2000);
@@ -35,17 +35,17 @@ Scheduler.Add("Task2", (e) =>
 
 ### manually trigger a Task
 ```c#
-Scheduler.Run("Task1");
+RZSched.Run("Task1");
 ```
 
 ### manually trigger a task but only run one instance (skip if task is already running)
 ```c#
-Scheduler.Run("Task1", singleinstance: true);
+RZSched.Run("Task1", singleinstance: true);
 ```
 
 ### Create a Task and trigger code OnError and OnComplete
 ```c#
-Scheduler.Add("Task1", (e) =>
+RZSched.Add("Task1", (e) =>
             {
                 Console.WriteLine($"{DateTime.Now.ToString("HH:mm:ss")} Timer {(e as ScheduledTask)?.Name} was started...");
                 Thread.Sleep(5000);
@@ -63,7 +63,7 @@ Scheduler.Add("Task1", (e) =>
 ### Queue Tasks to run in sequence
 >Note: The CancellationToken lifetime includes the time in the queue !!
 ```c#
-var T1 = Scheduler.Add("Task1", (e) =>
+var T1 = RZSched.Add("Task1", (e) =>
             {
                 Console.WriteLine($"{DateTime.Now.ToString("HH:mm:ss")} Timer {(e as ScheduledTask)?.Name} was started...");
                 Thread.Sleep(3000);
@@ -84,7 +84,6 @@ var T1 = Scheduler.Add("Task1", (e) =>
             {
                 Console.WriteLine($"{DateTime.Now.ToString("HH:mm:ss")} Timer {(e as ScheduledTask)?.Name} was completed with Result: {(e as ScheduledTask)?.Result}");
             });
-T1.Queue(new CancellationTokenSource(2000));
-T1.Queue();
-T1.Queue();
+RZSched.Queue(T1);
+RZSched.Queue(T1);
 ```
