@@ -9,6 +9,7 @@ namespace RZTask_Test
         }
 
         [Test]
+        [Order(1)]
         public void CreateTask_do_not_start()
         {
             RZSched.Add("TEST1", (e) => { (e as RZTask).Result = "myResult"; });
@@ -26,6 +27,7 @@ namespace RZTask_Test
         }
 
         [Test]
+        [Order(2)]
         public void GetExistingTask()
         {
             if (RZSched.Get("TEST1") != null)
@@ -35,6 +37,7 @@ namespace RZTask_Test
         }
 
         [Test]
+        [Order(3)]
         public void RunExistingTask()
         {
             var T1 = RZSched.Get("TEST1");
@@ -53,9 +56,10 @@ namespace RZTask_Test
         }
 
         [Test]
+        [Order(4)]
         public void RunTask_Background()
         {
-            var T1 = RZSched.Add("TEST1", (e) => 
+            var T1 = RZSched.Update("TEST1", (e) => 
             {
                 Console.WriteLine($"{DateTime.Now.ToString("HH:mm:ss")} Timer {(e as RZTask)?.Name} was started...");
                 Thread.Sleep(2000);
@@ -94,9 +98,10 @@ namespace RZTask_Test
         }
 
         [Test]
+        [Order(5)]
         public void RunTask_Cancel()
         {
-            var T1 = RZSched.Add("TEST1", (e) =>
+            var T1 = RZSched.Update("TEST1", (e) =>
             {
                 Console.WriteLine($"{DateTime.Now.ToString("HH:mm:ss")} Timer {(e as RZTask)?.Name} was started...");
                 Thread.Sleep(2000);
@@ -135,9 +140,10 @@ namespace RZTask_Test
         }
 
         [Test]
+        [Order(6)]
         public void RunTasks_Queue()
         {
-            var T1 = RZSched.Add("TEST1", (e) =>
+            var T1 = RZSched.Update("TEST1", (e) =>
             {
                 Console.WriteLine($"{DateTime.Now.ToString("HH:mm:ss")} Timer {(e as RZTask)?.Name} was started...");
                 Thread.Sleep(2000);
@@ -208,6 +214,27 @@ namespace RZTask_Test
             {
                 Assert.Fail("Part4");
             }
+        }
+
+        [Test]
+        [Order(7)]
+        public void CloneExistingTask()
+        {
+            var T1 = RZSched.Get("TEST1");
+            var T2 = T1.Clone("TEST3");
+
+            if (T1 != null && T2 != null)
+            {
+                T1.Run(true, false);
+                T2.Run();
+                Thread.Sleep(100);
+                if ((T1.Result == "myResult" && T1.IsCompleted && !T1.IsRunning && T1.LastRun > DateTime.Now.AddMinutes(-5)) && (T2.Result == "myResult" && T2.IsCompleted && !T2.IsRunning && T2.LastRun > DateTime.Now.AddMinutes(-5)))
+                    Assert.Pass();
+                else
+                    Assert.Fail();
+            }
+            else
+                Assert.Fail();
         }
     }
 }

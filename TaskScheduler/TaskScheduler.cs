@@ -217,6 +217,24 @@ namespace RZ.TaskScheduler
                 }
             }
         }
+
+        /// <summary>
+        /// Clones a scheduled task.
+        /// </summary>
+        /// <param name="Name"></param>
+        /// <returns></returns>
+        public RZTask? Clone(string Name, string NewName)
+        {
+            var existing = RZTasks.FirstOrDefault(x => x.Name == Name);
+            if (existing != null)
+            {
+                  return existing.Clone(NewName);
+            }
+            else
+            {
+                return null;
+            }
+        }
     }
 
     public sealed class RZSched : RZScheduler
@@ -332,6 +350,16 @@ namespace RZ.TaskScheduler
         public new static void Cleanup(bool Completed = true, bool NoSchedule = false)
         {
             _instance.Cleanup(Completed, NoSchedule);
+        }
+
+        /// <summary>
+        /// clones a scheduled task.
+        /// </summary>
+        /// <param name="Name"></param>
+        /// <returns></returns>
+        public new static RZTask? Clone(string Name, string NewName)
+        {
+            return _instance.Clone(Name, NewName);
         }
     }
 
@@ -714,6 +742,17 @@ namespace RZ.TaskScheduler
         {
             _onComplete = onComplete;
             return this;
+        }
+
+        public RZTask Clone(string? newName = null)
+        {
+            var rt = new RZTask
+            {
+                Name = newName ?? Name,
+                TimerCallback = TimerCallback.Clone() as TimerCallback
+            };
+
+            return rt;
         }
     }
 
