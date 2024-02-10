@@ -66,6 +66,19 @@ namespace RZ.TaskScheduler
             }
         }
 
+        public RZTask? Add(RZTask Task)
+        {
+            if (RZTasks.FirstOrDefault(x => x.Name == Task.Name) == null)
+            {
+                RZTasks.Add(Task);
+                return Task;
+            }
+            else
+            {
+                return null;
+            }
+        }
+
         /// <summary>
         /// Updates a scheduled task.
         /// </summary>
@@ -278,6 +291,16 @@ namespace RZ.TaskScheduler
         public new static RZTask? Add(string Name, TimerCallback timerCallback)
         {
             return _instance.Add(Name, timerCallback);
+        }
+
+        /// <summary>
+        /// adds a scheduled task, skip if task exists.
+        /// </summary>
+        /// <param name="Task"></param>
+        /// <returns></returns>
+        public new static RZTask? Add(RZTask Task)
+        {
+            return _instance.Add(Task);
         }
 
         /// <summary>
