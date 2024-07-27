@@ -151,11 +151,14 @@ namespace RZ.TaskScheduler
         /// Calls the scheduled task by name.
         /// </summary>
         /// <param name="Name"></param>
-        public bool Run(string Name)
+        public bool Run(string Name, dynamic? Parameters = null)
         {
             var existing = RZTasks.FirstOrDefault(x => x.Name == Name);
             if (existing != null)
             {
+                if(Parameters != null)
+                    existing.Parameters = Parameters;
+                
                 new Task(() =>
                 {
                     existing.Run(null);
@@ -177,13 +180,16 @@ namespace RZ.TaskScheduler
         /// <param name="wait"></param>
         /// <param name="timeout"></param>
         /// <returns></returns>
-        public bool Run(string Name, bool singleinstance, bool wait = false, TimeSpan? timeout = null)
+        public bool Run(string Name, bool singleinstance, bool wait = false, TimeSpan? timeout = null, dynamic? Parameters = null)
         {
             if (singleinstance)
             {
                 var existing = RZTasks.FirstOrDefault(x => x.Name == Name);
                 if (existing != null)
                 {
+                    if (Parameters != null)
+                        existing.Parameters = Parameters;
+
                     existing.Run(singleinstance, wait, timeout);
                 }
 
@@ -402,6 +408,8 @@ namespace RZ.TaskScheduler
         private TimerCallback? _onComplete { get; set; }
         public object? Result { get; set; }
         public CancellationToken CancellationToken { get; set; }
+
+        public dynamic Parameters { get; set; }
 
         public bool IsRunning
         {
