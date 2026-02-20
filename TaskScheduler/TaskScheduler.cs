@@ -190,7 +190,7 @@ namespace RZ.TaskScheduler
                     if (Parameters != null)
                         existing.Parameters = Parameters;
 
-                    existing.Run(singleinstance, wait, timeout);
+                    return existing.Run(singleinstance, wait, timeout);
                 }
 
             }
@@ -409,7 +409,7 @@ namespace RZ.TaskScheduler
         public object? Result { get; set; }
         public CancellationToken CancellationToken { get; set; }
 
-        public dynamic Parameters { get; set; }
+        public dynamic? Parameters { get; set; }
 
         public bool IsRunning
         {
